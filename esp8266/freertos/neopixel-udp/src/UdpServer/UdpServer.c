@@ -30,12 +30,11 @@
 
 #include <esp_common.h>
 #include <espconn.h>
-#include <freertos/FreeRTOS.h>
+
 #include <freertos/task.h>
 #include <freertos/queue.h>
 
-#include "Ap.h"
-#include <Config/IApCfg.h>
+#include "UdpServer.h"
 
 /**
  * ------------------------------------------------------------------
@@ -49,12 +48,11 @@
  * ------------------------------------------------------------------
  */
 
-typedef struct ApVars_s
-{
-    struct station_config stationConfig;
-    bool connected;
-    bool ready;
-} tApVars;
+typedef struct {
+    struct espconn connection;
+    esp_udp        udp;
+} tUdpServerVars;
+
 
 /**
  * ------------------------------------------------------------------
@@ -62,7 +60,8 @@ typedef struct ApVars_s
  * ------------------------------------------------------------------
  */
 
-void Ap_HandleEventCb( System_Event_t *event );
+void UdpServer_RecvCb( void *pArg, char *pData, unsigned short len );
+void UdpServer_SendCb( void *pArg );
 
 /**
  * ------------------------------------------------------------------
@@ -70,10 +69,7 @@ void Ap_HandleEventCb( System_Event_t *event );
  * ------------------------------------------------------------------
  */
 
-static tApVars apVars = {
-    .connected = FALSE,
-    .ready     = FALSE
-};
+static tUdpServerVars udpServerVars;
 
 
 /**
@@ -87,67 +83,31 @@ static tApVars apVars = {
  * Function
  * ****************************************************************************
  */
-void IAp_Init( void )
+bool IUdpServer_Start( void )
 {
-    static bool initialized = FALSE;
-    if ( !initialized )
-    {
-        initialized = TRUE;
-        memset( &apVars, 0, sizeof( apVars ) );
-    }
-}
+    memset( &udpServerVars.connection, 0, sizeof( udpServerVars.connection ) );
+    memset( &udpServerVars.udp, 0, sizeof( udpServerVars.udp ) );
 
-/**
- * ****************************************************************************
- * Function
- * ****************************************************************************
- */
-void IAp_Start( void )
-{
-    // Nothing to do for now
-}
+    udpServerVars.connection.type      = ESPCONN_UDP;
+    udpServerVars.connection.state     = ESPCONN_NONE;
+    udpServerVars.connection.proto.udp = &udpServerVars.udp;
+    udpServerVars.udp.local_port      = 8000;
 
-/**
- * ****************************************************************************
- * Function
- * ****************************************************************************
- */
-bool IAp_ConnectToWifi( void )
-{
-    if ( wifi_set_opmode( STATIONAP_MODE ) == FALSE )
-    {
-        return FALSE;
-    }
-    
-    memset( &apVars.stationConfig, 0, sizeof( apVars.stationConfig ) );
-    sprintf( apVars.stationConfig.ssid, AP_SSID );
-    sprintf( apVars.stationConfig.password, AP_PASS );
+    // os_printf( "" );
+    espconn_regist_recvcb( &udpServerVars.connection, UdpServer_RecvCb );
+    espconn_regist_sentcb( &udpServerVars.connection, UdpServer_SendCb );
 
-    if ( wifi_station_set_config( &apVars.stationConfig ) == FALSE )
+    int8 res = 0;
+    if ( espconn_create( &udpServerVars.connection ) != 0 )
     {
-        return FALSE;
-    }
-    if ( wifi_set_event_handler_cb( Ap_HandleEventCb ) == FALSE )
-    {
-        return FALSE;
-    }
-    if ( wifi_station_connect() == FALSE )
-    {
+        os_printf( "Unable to create UDP server.\n" );
         return FALSE;
     }
 
+    os_printf( "UDP server started on port [%d].\n", udpServerVars.udp.local_port );
     return TRUE;
 }
 
-/**
- * ****************************************************************************
- * Function
- * ****************************************************************************
- */
-bool IAp_IsReady( void )
-{
-    return apVars.connected;
-}
 
 /**
  * ------------------------------------------------------------------
@@ -160,42 +120,50 @@ bool IAp_IsReady( void )
  * Function
  * ****************************************************************************
  */
-void Ap_HandleEventCb( System_Event_t *event )
+void UdpServer_RecvCb( void *pArg, char *pData, unsigned short len )
 {
-    switch( event->event_id )
+    struct espconn *pConnection = (struct espconn *)pArg;
+    // Store the IP address from the sender of this data.
+
+    os_printf( "Data: %s\n", pData );
+
+    remot_info *remote = NULL;
+    if( espconn_get_connection_info( pConnection, &remote, 0 ) == 0  && remote != NULL )
     {
-        case EVENT_STAMODE_CONNECTED:
-        {
-            // Connected to access point
-            printf( "Connected to WiFi AP\n" );
-            apVars.connected = TRUE;
-        }
-        break;
-        case EVENT_STAMODE_DISCONNECTED:
-        {
-            // Disconnected from access point
-            printf( "Disconnected from WiFi\n" );
-            apVars.connected = FALSE;
-            apVars.ready     = FALSE;
-        }
-        break;
-        case EVENT_STAMODE_AUTHMODE_CHANGE:
-        {
-            // Authentication mode change
-            printf( "Auth mode change\n" );
-        }
-        break;
-        case EVENT_STAMODE_GOT_IP:
-        {
-            // Got IP from access point
-            printf( "Got IP:" IPSTR "\n", IP2STR( &event->event_info.got_ip.ip ) );
-            apVars.ready = TRUE;
-        }
-        break;
-        default:
-        {
-            // Unhandled event
-        }
-        break;
+        os_printf( "REMOTE INFO:\n\tremote_port: %d\n\tudp.remote_ip: %d.%d.%d.%d\n",
+        remote->remote_port,
+        remote->remote_ip[0],
+        remote->remote_ip[1],
+        remote->remote_ip[2],
+        remote->remote_ip[3]
+    );
     }
+    else
+    {
+        os_printf( "Unable to retreive remote information...\n" );
+    }
+
+    // Send data right back
+    pConnection->proto.udp->remote_port = remote->remote_port;
+    memcpy( &(pConnection->proto.udp->remote_ip), &(remote->remote_ip), sizeof( remote->remote_ip ) );
+    
+    espconn_send(pConnection, pData, len);
+}
+
+/**
+ * ****************************************************************************
+ * Function
+ * ****************************************************************************
+ */
+void UdpServer_SendCb( void *pArg )
+{
+    struct espconn* pConnection = pArg;
+    os_printf(
+        "UDP_SEND_CB ip:%d.%d.%d.%d port:%d\n",
+        pConnection->proto.udp->remote_ip[0],
+        pConnection->proto.udp->remote_ip[1],
+        pConnection->proto.udp->remote_ip[2],
+        pConnection->proto.udp->remote_ip[3],
+        pConnection->proto.udp->remote_port
+    );
 }

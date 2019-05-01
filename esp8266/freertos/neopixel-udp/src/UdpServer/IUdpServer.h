@@ -22,8 +22,8 @@
  * SOFTWARE.
  */
 
-#ifndef IAP_H
-#define IAP_H
+#ifndef IUDPSERVER_H
+#define IUDPSERVER_H
 
 /**
  * ------------------------------------------------------------------
@@ -50,17 +50,8 @@
  */
 
 /**
- * Set ESP8266 in station mode and connect to configured SSID.
- * 
- * @param  -
- * @return TRUE if succesful in setup, FALSE otherwise.
+ * Start UDP server
  */
-bool IAp_ConnectToWifi( void );
+bool IUdpServer_Start( void );
 
-/**
- * Get if connected to WiFi and ready to be used.
- * @return TRUE if connected, FALSE otherwise
- */
-bool IAp_IsReady();
-
-#endif // IAP_H
+#endif // IUDPSERVER_H

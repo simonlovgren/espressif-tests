@@ -27,6 +27,7 @@
 
 
 #include <Ap/IAp.h>
+#include <UdpServer/IUdpServer.h>
 
 #include "gpio.h"
 
@@ -90,7 +91,23 @@ void task_blink(void* ignore)
         gpio16_output_set(1);
         vTaskDelay(1000/portTICK_RATE_MS);
         ++count;
-        printf( "Blinked %d\n", count );
+    }
+
+    vTaskDelete(NULL);
+}
+
+/**
+ * ****************************************************************************
+ * Function
+ * ****************************************************************************
+ */
+void task_tick_announcement(void* ignore)
+{
+    uint32_t secondsSinceStart = 0;
+    while(true) {
+        vTaskDelay(1000/portTICK_RATE_MS);
+        ++secondsSinceStart;
+        os_printf( "%u s\n", secondsSinceStart );
     }
 
     vTaskDelete(NULL);
@@ -104,8 +121,29 @@ void task_blink(void* ignore)
  */
 void task_connect(void* ignore)
 {
-    IAp_ConnectToWifi();
-    printf( "Done with WIFI connection setup.\n" );
+    IAp_Init();
+    IAp_Start();
+
+    if ( IAp_ConnectToWifi() == FALSE )
+    {
+        os_printf( "Unable to connect to WiFi\n" );
+        goto error;
+    }
+    
+    while( IAp_IsReady() == FALSE )
+    {
+        os_printf( "Not ready\n" );
+        vTaskDelay( 1000 );
+    }
+    os_printf( "ready\n" );
+
+    if ( IUdpServer_Start() == FALSE )
+    {
+        os_printf( "Unable to start UDP server.\n" );
+    }
+
+    
+    error:
     vTaskDelete(NULL);
 }
 
@@ -121,6 +159,7 @@ void task_connect(void* ignore)
  */
 void user_init(void)
 {
-    xTaskCreate(&task_connect, "connect_wifi", 500, NULL, 6, NULL);
-    xTaskCreate(&task_blink, "startup", 2048, NULL, 1, NULL);
+    xTaskCreate(&task_connect, "connect_wifi", 512, NULL, 6, NULL);
+    xTaskCreate(&task_blink, "startup", 512, NULL, 1, NULL);
+    xTaskCreate(&task_tick_announcement, "tick_announcer", 512, NULL, 1, NULL);
 }
