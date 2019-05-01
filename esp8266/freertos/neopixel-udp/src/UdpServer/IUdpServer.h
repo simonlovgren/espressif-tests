@@ -52,6 +52,6 @@
 /**
  * Start UDP server
  */
-bool IUdpServer_Start( void );
+void IUdpServer_Start( void );
 
 #endif // IUDPSERVER_H

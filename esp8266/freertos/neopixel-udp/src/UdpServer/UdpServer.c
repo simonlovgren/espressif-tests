@@ -42,6 +42,8 @@
  * ------------------------------------------------------------------
  */
 
+#define NUM_SERVERS 2
+
 /**
  * ------------------------------------------------------------------
  * Typedefs
@@ -49,8 +51,13 @@
  */
 
 typedef struct {
+    uint16_t       port;
     struct espconn connection;
     esp_udp        udp;
+} tUdpServer;
+
+typedef struct {
+    tUdpServer servers[ NUM_SERVERS ];
 } tUdpServerVars;
 
 
@@ -69,7 +76,12 @@ void UdpServer_SendCb( void *pArg );
  * ------------------------------------------------------------------
  */
 
-static tUdpServerVars udpServerVars;
+static tUdpServerVars udpServerVars = {
+    .servers = {
+        { 8000 },
+        { 9000 }
+    }
+};
 
 
 /**
@@ -83,29 +95,61 @@ static tUdpServerVars udpServerVars;
  * Function
  * ****************************************************************************
  */
-bool IUdpServer_Start( void )
+void IUdpServer_Start( void )
 {
-    memset( &udpServerVars.connection, 0, sizeof( udpServerVars.connection ) );
-    memset( &udpServerVars.udp, 0, sizeof( udpServerVars.udp ) );
-
-    udpServerVars.connection.type      = ESPCONN_UDP;
-    udpServerVars.connection.state     = ESPCONN_NONE;
-    udpServerVars.connection.proto.udp = &udpServerVars.udp;
-    udpServerVars.udp.local_port      = 8000;
-
-    // os_printf( "" );
-    espconn_regist_recvcb( &udpServerVars.connection, UdpServer_RecvCb );
-    espconn_regist_sentcb( &udpServerVars.connection, UdpServer_SendCb );
-
-    int8 res = 0;
-    if ( espconn_create( &udpServerVars.connection ) != 0 )
+    for ( uint32_t i = 0; i < NUM_SERVERS; ++i )
     {
-        os_printf( "Unable to create UDP server.\n" );
-        return FALSE;
-    }
+        tUdpServer *pServer = &udpServerVars.servers[ i ];
 
-    os_printf( "UDP server started on port [%d].\n", udpServerVars.udp.local_port );
-    return TRUE;
+        memset( &pServer->connection, 0, sizeof( pServer->connection ) );
+        memset( &pServer->udp, 0, sizeof( pServer->udp ) );
+
+        pServer->connection.type      = ESPCONN_UDP;
+        pServer->connection.state     = ESPCONN_NONE;
+        pServer->connection.proto.udp = &pServer->udp;
+        pServer->udp.local_port       = pServer->port;
+
+        pServer->connection.reserve   = ( void * )i;
+
+        // os_printf( "" );
+        espconn_regist_recvcb( &pServer->connection, UdpServer_RecvCb );
+        espconn_regist_sentcb( &pServer->connection, UdpServer_SendCb );
+
+        int8 res = espconn_create( &pServer->connection );
+        if ( res != 0 )
+        {
+            os_printf( "Unable to create UDP server on port [%d].\n", pServer->port );
+            os_printf( "Reason: " );
+            switch( res )
+            {
+                case ESPCONN_MEM:
+                {
+                    os_printf( "Out of memory\n" );
+                }
+                break;
+                case ESPCONN_ISCONN:
+                {
+                    os_printf( "Already connected\n" );
+                }
+                break;
+                case ESPCONN_ARG:
+                {
+                    os_printf( "Illegal argument\n" );
+                }
+                break;
+                default:
+                {
+                    os_printf( "other [%u]\n", res );
+                }
+                break;
+            }
+        }
+        else
+        {
+            os_printf( "UDP server started on port [%d].\n", pServer->port );
+        }
+        vTaskDelay( 1000/portTICK_RATE_MS );
+    }
 }
 
 
@@ -125,12 +169,13 @@ void UdpServer_RecvCb( void *pArg, char *pData, unsigned short len )
     struct espconn *pConnection = (struct espconn *)pArg;
     // Store the IP address from the sender of this data.
 
-    os_printf( "Data: %s\n", pData );
+    os_printf( "[%d] Data: %s\n", (uint32_t)pConnection->reserve, pData );
 
     remot_info *remote = NULL;
     if( espconn_get_connection_info( pConnection, &remote, 0 ) == 0  && remote != NULL )
     {
-        os_printf( "REMOTE INFO:\n\tremote_port: %d\n\tudp.remote_ip: %d.%d.%d.%d\n",
+        os_printf( "[%d] REMOTE INFO:\n\tremote_port: %d\n\tudp.remote_ip: %d.%d.%d.%d\n",
+        (uint32_t)pConnection->reserve,
         remote->remote_port,
         remote->remote_ip[0],
         remote->remote_ip[1],
@@ -140,7 +185,7 @@ void UdpServer_RecvCb( void *pArg, char *pData, unsigned short len )
     }
     else
     {
-        os_printf( "Unable to retreive remote information...\n" );
+        os_printf( "[%d] Unable to retreive remote information...\n", (uint32_t)pConnection->reserve );
     }
 
     // Send data right back
@@ -159,7 +204,8 @@ void UdpServer_SendCb( void *pArg )
 {
     struct espconn* pConnection = pArg;
     os_printf(
-        "UDP_SEND_CB ip:%d.%d.%d.%d port:%d\n",
+        "[%d] UDP_SEND_CB ip:%d.%d.%d.%d port:%d\n",
+        (uint32_t)pConnection->reserve,
         pConnection->proto.udp->remote_ip[0],
         pConnection->proto.udp->remote_ip[1],
         pConnection->proto.udp->remote_ip[2],

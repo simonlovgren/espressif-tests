@@ -137,12 +137,8 @@ void task_connect(void* ignore)
     }
     os_printf( "ready\n" );
 
-    if ( IUdpServer_Start() == FALSE )
-    {
-        os_printf( "Unable to start UDP server.\n" );
-    }
+    IUdpServer_Start();
 
-    
     error:
     vTaskDelete(NULL);
 }
