@@ -14,7 +14,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include <esp_log.h>
 #include <esp_wifi.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
@@ -24,12 +23,6 @@
  * Defines
  * ----------------------------------------------------------------------------------------------
  */
-
-/**
- * @def   TAG
- * @brief Tag used in logs
- */
-#define TAG  ( "scan" )
 
 /**
  * @def   SCAN_LIST_SIZE
@@ -59,7 +52,7 @@ typedef struct
 /**
  * @brief      app_init
  *             Initialization of stuff used by the app
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 static void app_init( void );
@@ -67,7 +60,7 @@ static void app_init( void );
 /**
  * @brief      app_start
  *             Start of stuff used by the app
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 static void app_start( void );
@@ -75,7 +68,7 @@ static void app_start( void );
 /**
  * @brief      app_run
  *             Non-returning function.
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 static void app_run( void );
@@ -83,7 +76,7 @@ static void app_run( void );
 /**
  * @brief      configure_wifi
  *             Configure onboard WiFi.
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 static void configure_wifi( void );
@@ -91,7 +84,7 @@ static void configure_wifi( void );
 /**
  * @brief      scan_wifi
  *             Scans for WiFi access points and prints them to the log.
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 static void scan_wifi( void );
@@ -99,7 +92,7 @@ static void scan_wifi( void );
 /**
  * @brief      print_aps
  *             Print access points in a nice table.
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 static void print_aps( void );
@@ -107,7 +100,7 @@ static void print_aps( void );
 /**
  * @brief      wifi_event_handler
  *             Eventhandler for WiFi events. Mainly to shut up error logs.
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 esp_err_t wifi_event_handler( system_event_t *event );
@@ -145,7 +138,7 @@ static tAppData appData = { .started = false };
 /**
  * @brief      app_main
  *             This is the entrypoint of the user application.
- * @param[ - ] -
+ * @param[]    -
  * @return     -
  */
 void app_main( void )
