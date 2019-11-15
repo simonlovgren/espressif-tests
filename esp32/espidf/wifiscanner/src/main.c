@@ -31,6 +31,10 @@
  */
 #define TAG  ( "scan" )
 
+/**
+ * @def   SCAN_LIST_SIZE
+ * @brief Max number of AP records (size of AP record array)
+ */
 #define SCAN_LIST_SIZE ( 50 )
 
 /**
